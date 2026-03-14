@@ -74,7 +74,10 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print(f"[WARNING] Could not init DB on startup: {e}")
 
 import requests
 
