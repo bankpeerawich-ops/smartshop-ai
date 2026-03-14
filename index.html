@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartShop AI</title>
+    <meta name="description" content="AI-powered product search and price comparison app">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div id="app" class="app-container">
+        <!-- Header -->
+        <header class="navbar">
+            <div class="logo" style="cursor: pointer;" onclick="navigate('home')">
+                <i class="fa-solid fa-scale-balanced"
+                    style="color: var(--accent-blue); font-size: 1.5rem; margin-right: 0.5rem;"></i> SmartShop
+                <span class="accent">AI</span>
+            </div>
+            <div class="nav-actions" id="nav-actions">
+                <button class="btn-outline" onclick="openAuthModal()">เข้าสู่ระบบ</button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content">
+            <!-- Dynamic Content Injected Here by JS -->
+        </main>
+
+        <!-- Image Upload Modal -->
+        <div id="image-upload-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>ค้นหาด้วยรูปภาพ</h3>
+                    <button class="close-btn" onclick="closeImageUpload()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-area" id="upload-area">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <p>ลากและวาง หรือคลิกเพื่ออัปโหลด</p>
+                        <input type="file" id="file-input" class="hidden-input" accept="image/*">
+                    </div>
+                    <div id="upload-status" class="hidden">
+                        <p>AI กำลังวิเคราะห์รูปภาพของคุณ...</p>
+                        <div class="loader"></div>
+                    </div>
+                    <div id="image-selection-area" class="hidden">
+                        <p style="margin-bottom: 0.5rem; color: var(--text-secondary);">แตะที่กรอบสินค้า
+                            หรือเลือกจากรายการด้านล่างเพื่อค้นหา</p>
+                        <div
+                            style="position: relative; width: 100%; max-height: 300px; border-radius: 8px; overflow: hidden; display: flex; justify-content: center; background: #000;">
+                            <img id="preview-image" src="" style="max-width: 100%; max-height: 300px; display: block;">
+                            <div id="bounding-boxes"
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">
+                            </div>
+                        </div>
+                        <div id="image-chips"
+                            style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auth Modal -->
+        <div id="auth-modal" class="modal hidden">
+            <div class="modal-content" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3 id="auth-title">เข้าสู่ระบบ</h3>
+                    <button class="close-btn" onclick="closeAuthModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <input type="text" id="auth-username" placeholder="ชื่อผู้ใช้"
+                            style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: 8px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <input type="password" id="auth-password" placeholder="รหัสผ่าน"
+                            style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: 8px;">
+                    </div>
+                    <p id="auth-error"
+                        style="color: var(--red-500); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></p>
+                    <button id="auth-submit-btn" class="btn-primary" style="width: 100%; margin-bottom: 1rem;"
+                        onclick="handleAuthSubmit()">เข้าสู่ระบบ</button>
+                    <p style="text-align: center; font-size: 0.9rem;" id="auth-toggle-text">
+                        ยังไม่มีบัญชี? <a href="#" onclick="toggleAuthMode()"
+                            style="color: var(--blue-500); text-decoration: none;">สมัครสมาชิก</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Sidebar -->
+        <div id="history-sidebar" class="sidebar hidden">
+            <div class="sidebar-header">
+                <h3><i class="fa-solid fa-clock-rotate-left"></i> ประวัติการค้นหา</h3>
+                <button class="close-btn" onclick="toggleHistory()">×</button>
+            </div>
+            <div class="sidebar-body" id="history-list">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Templates -->
+    <template id="template-home">
+        <section class="home-view">
+            <div class="hero">
+                <h1>ค้นหาดีลที่ดีที่สุดด้วย AI</h1>
+                <p>ค้นหาสินค้า เปรียบเทียบราคา และประหยัดมากขึ้น</p>
+                <div class="search-container">
+                    <div class="search-bar">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="search-input" placeholder="ค้นหาสินค้า เช่น AirPods Pro...">
+                        <button class="image-search-btn" onclick="openImageUpload()" title="ค้นหาด้วยรูปภาพ">
+                            <i class="fa-solid fa-camera"></i>
+                        </button>
+                    </div>
+                    <button class="btn-primary" onclick="handleSearch()">ค้นหา</button>
+                </div>
+            </div>
+
+            <div class="trending-section">
+                <h2>กำลังมาแรง</h2>
+                <div class="trending-grid" id="trending-container">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <template id="template-results">
+        <section class="results-view">
+            <div class="results-header">
+                <button class="back-btn" onclick="navigate('home')"><i class="fa-solid fa-arrow-left"></i></button>
+                <div class="search-bar compact">
+                    <input type="text" id="results-search-input">
+                    <button class="search-submit"
+                        onclick="handleSearch(document.getElementById('results-search-input').value)"><i
+                            class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+            </div>
+
+            <div class="ai-understanding-panel">
+                <div class="ai-header">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> ความเข้าใจของ AI
+                </div>
+                <div class="ai-body">
+                    <p>ขยายคำค้นหาเพื่อให้ได้ผลลัพธ์ที่ดีที่สุด:</p>
+                    <div class="tags" id="ai-query-expansion">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="results-grid" id="search-results-container">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+    </template>
+
+    <template id="template-compare">
+        <section class="compare-view">
+            <div class="results-header">
+                <button class="back-btn" onclick="navigate('results')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2>เปรียบเทียบราคา</h2>
+            </div>
+
+            <div id="compare-product-header" class="compare-product-header">
+                <!-- Populated by JS -->
+            </div>
+
+            <div class="ai-recommendation-panel" id="ai-recommendation-panel">
+                <!-- Populated by JS -->
+            </div>
+
+            <div class="comparison-table-container">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>แพลตฟอร์ม</th>
+                            <th>ราคา</th>
+                            <th>คะแนน</th>
+                            <th>ดำเนินการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparison-table-body">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
