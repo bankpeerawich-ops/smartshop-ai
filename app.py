@@ -422,12 +422,19 @@ def upload_image():
         return jsonify({'error': 'ไฟล์รูปภาพไม่ถูกต้อง'}), 400
         
     try:
+        import PIL.Image as PILImage
+        import io
+
+        # Read image bytes directly for PIL (no file.save needed first)
+        img_bytes = file.read()
+        img = PILImage.open(io.BytesIO(img_bytes))
+
+        # Save temp copy for cleanup purposes
         temp_dir = tempfile.gettempdir()
-        filename = secure_filename(file.filename)
+        filename = secure_filename(file.filename) if file.filename else "upload.jpg"
         temp_path = os.path.join(temp_dir, filename)
-        file.save(temp_path)
-        
-        gemini_file = genai.upload_file(temp_path)
+        img.save(temp_path)
+
         
         # Using gemini-flash-latest for better quota stability
         model = genai.GenerativeModel("gemini-flash-latest")
@@ -445,29 +452,32 @@ Each object must have:
 "cheaper_query": Thai search query for a similar look but cheaper alternative (optional)
 "box": [ymin, xmin, ymax, xmax] 0-1000 integers.
 """
-        response = model.generate_content([gemini_file, prompt])
+        # Pass image directly as PIL object
+        response = model.generate_content([img, prompt])
         
-        import json
         text = response.text.strip()
         if text.startswith("```json"):
-            text = text[7:-3]
+            text = text[7:]
+            text = text[:text.rfind("```")]
         elif text.startswith("```"):
-            text = text[3:-3]
+            text = text[3:]
+            text = text[:text.rfind("```")]
             
         try:
             items = json.loads(text.strip())
+            if not isinstance(items, list):
+                items = [items]
         except json.JSONDecodeError:
             # Fallback if json fails
-            items = [{"label": "สินค้าที่พบ", "query": response.text[:50], "box": [0,0,1000,1000]}]
+            items = [{"label": "สินค้าที่พบ", "query": response.text[:80], "box": [0,0,1000,1000]}]
         
         os.remove(temp_path)
-        genai.delete_file(gemini_file.name)
         
         return jsonify({'items': items})
         
     except Exception as e:
         print(f"Vision API Error: {e}")
-        return jsonify({'error': 'เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพ'}), 500
+        return jsonify({'error': f'เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพ: {str(e)}'}), 500
 
 # --- Authentication & History Endpoints ---
 
