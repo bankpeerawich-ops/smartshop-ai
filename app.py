@@ -11,7 +11,7 @@ import google.generativeai as genai
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAbIl5EIhFOQ_GIW-iqi016kuG0slgbZJE")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAX_tMW8cdF_OvQdIY08gpAIcdYscK4eis")
 genai.configure(api_key=GEMINI_API_KEY)
 
 app = Flask(__name__, static_url_path='', static_folder='.')
