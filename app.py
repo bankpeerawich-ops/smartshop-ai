@@ -481,52 +481,83 @@ Each object must have:
 
 # --- Authentication & History Endpoints ---
 
+def save_search_history(user_id, query):
+    """Save a search query to history (works with both SQLite and PostgreSQL)."""
+    try:
+        conn = get_db_connection()
+        if DATABASE_URL:
+            c = conn.cursor()
+            c.execute('INSERT INTO search_history (user_id, query) VALUES (%s, %s)', (user_id, query))
+        else:
+            c = conn.cursor()
+            c.execute('INSERT INTO search_history (user_id, query) VALUES (?, ?)', (user_id, query))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[History] Could not save: {e}")
+
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
     
     if not username or not password:
         return jsonify({'error': 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'}), 400
+    if len(username) < 3:
+        return jsonify({'error': 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร'}), 400
+    if len(password) < 6:
+        return jsonify({'error': 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'}), 400
         
     hashed_pw = generate_password_hash(password, method='pbkdf2:sha256')
     
     try:
         conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_pw))
+        if DATABASE_URL:
+            c = conn.cursor()
+            c.execute('INSERT INTO users (username, password) VALUES (%s, %s)', (username, hashed_pw))
+        else:
+            c = conn.cursor()
+            c.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_pw))
         conn.commit()
         conn.close()
         return jsonify({'message': 'สมัครสมาชิกสำเร็จ!'})
-    except sqlite3.IntegrityError:
-        return jsonify({'error': 'ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว'}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        err = str(e).lower()
+        if 'unique' in err or 'duplicate' in err:
+            return jsonify({'error': 'ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว'}), 400
+        return jsonify({'error': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
     
-    conn = get_db_connection()
-    if DATABASE_URL:
-        c = conn.cursor(cursor_factory=RealDictCursor)
-        c.execute('SELECT * FROM users WHERE username = %s', (username,))
-    else:
-        c = conn.cursor()
-        c.execute('SELECT * FROM users WHERE username = ?', (username,))
-    
-    user = c.fetchone()
-    conn.close()
-    
-    if user and check_password_hash(user['password'], password):
-        session['user_id'] = user['id']
-        session['username'] = user['username']
-        return jsonify({'message': 'เข้าสู่ระบบสำเร็จ!', 'username': user['username']})
-    else:
-        return jsonify({'error': 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'}), 401
+    if not username or not password:
+        return jsonify({'error': 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'}), 400
+
+    try:
+        conn = get_db_connection()
+        if DATABASE_URL:
+            c = conn.cursor(cursor_factory=RealDictCursor)
+            c.execute('SELECT * FROM users WHERE username = %s', (username,))
+        else:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute('SELECT * FROM users WHERE username = ?', (username,))
+        
+        user = c.fetchone()
+        conn.close()
+        
+        if user and check_password_hash(user['password'], password):
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            return jsonify({'message': 'เข้าสู่ระบบสำเร็จ!', 'username': user['username']})
+        else:
+            return jsonify({'error': 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'}), 401
+    except Exception as e:
+        return jsonify({'error': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
@@ -547,33 +578,35 @@ def get_history():
     if not user_id:
         return jsonify({'error': 'กรุณาเข้าสู่ระบบก่อน'}), 401
         
-    conn = get_db_connection()
-    if DATABASE_URL:
-        c = conn.cursor(cursor_factory=RealDictCursor)
-        # Get last 10 unique searches
-        c.execute('''
-            SELECT query, MAX(timestamp) as ts 
-            FROM search_history 
-            WHERE user_id = %s 
-            GROUP BY query 
-            ORDER BY ts DESC 
-            LIMIT 10
-        ''', (user_id,))
-    else:
-        c = conn.cursor()
-        c.execute('''
-            SELECT query, MAX(timestamp) as ts 
-            FROM search_history 
-            WHERE user_id = ? 
-            GROUP BY query 
-            ORDER BY ts DESC 
-            LIMIT 10
-        ''', (user_id,))
-    
-    history = c.fetchall()
-    conn.close()
-    
-    return jsonify([row['query'] for row in history])
+    try:
+        conn = get_db_connection()
+        if DATABASE_URL:
+            c = conn.cursor(cursor_factory=RealDictCursor)
+            c.execute('''
+                SELECT query, MAX(timestamp) as ts 
+                FROM search_history 
+                WHERE user_id = %s 
+                GROUP BY query 
+                ORDER BY ts DESC 
+                LIMIT 10
+            ''', (user_id,))
+        else:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute('''
+                SELECT query, MAX(timestamp) as ts 
+                FROM search_history 
+                WHERE user_id = ? 
+                GROUP BY query 
+                ORDER BY ts DESC 
+                LIMIT 10
+            ''', (user_id,))
+        
+        history = c.fetchall()
+        conn.close()
+        return jsonify([row['query'] for row in history])
+    except Exception as e:
+        return jsonify([])
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
