@@ -425,16 +425,18 @@ def upload_image():
         import PIL.Image as PILImage
         import io
 
-        # Read image bytes directly for PIL (no file.save needed first)
+        # Read image bytes directly
         img_bytes = file.read()
         img = PILImage.open(io.BytesIO(img_bytes))
-
-        # Save temp copy for cleanup purposes
-        temp_dir = tempfile.gettempdir()
-        filename = secure_filename(file.filename) if file.filename else "upload.jpg"
-        temp_path = os.path.join(temp_dir, filename)
-        img.save(temp_path)
-
+        
+        # Convert to RGB to prevent crashes with RGBA (PNGs) or P modes
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+            
+        # Resize if image is too large (prevents memory/timeout issues on Render)
+        max_size = 1024
+        if max(img.width, img.height) > max_size:
+            img.thumbnail((max_size, max_size), PILImage.Resampling.LANCZOS)
         
         # Using gemini-flash-latest for better quota stability
         model = genai.GenerativeModel("gemini-flash-latest")
@@ -470,8 +472,6 @@ Each object must have:
         except json.JSONDecodeError:
             # Fallback if json fails
             items = [{"label": "สินค้าที่พบ", "query": response.text[:80], "box": [0,0,1000,1000]}]
-        
-        os.remove(temp_path)
         
         return jsonify({'items': items})
         
